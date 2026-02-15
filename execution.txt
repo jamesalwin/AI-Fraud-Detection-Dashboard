@@ -1,0 +1,6 @@
+.venv\Scripts\activate
+
+python train_model.py
+
+uvicorn app:app --reload
+

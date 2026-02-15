@@ -1,0 +1,267 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Fraud Analytics Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+      body {
+        background-color: #f8f9fa;
+        color: #212529;
+      }
+
+      .card {
+        border-radius: 15px;
+      }
+
+      .stat-card {
+        padding: 25px;
+        border-radius: 15px;
+        text-align: center;
+        color: white;
+      }
+
+      .total {
+        background-color: #0d6efd;
+      }
+      .fraud {
+        background-color: #dc3545;
+      }
+      .legit {
+        background-color: #198754;
+      }
+
+      h2,
+      h5 {
+        font-weight: 600;
+      }
+
+      .fade-card {
+        opacity: 0;
+        transform: translateY(40px);
+        transition: all 0.8s ease;
+      }
+
+      .fade-card.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+    </style>
+  </head>
+  <body>
+    <div class="container mt-5">
+      <h2 class="text-center mb-4">Fraud Monitoring Dashboard</h2>
+
+      {% if error %}
+      <div class="alert alert-danger text-center">{{ error }}</div>
+      {% else %}
+
+      <!-- STATISTICS -->
+      <div class="row mb-4 fade-card">
+        <div class="col-md-4">
+          <div class="stat-card total shadow">
+            <h5>Total Transactions</h5>
+            <h2>{{ total }}</h2>
+          </div>
+        </div>
+
+        <div class="col-md-4 fade-card">
+          <div class="stat-card fraud shadow">
+            <h5>Fraudulent</h5>
+            <h2>{{ fraud_count }}</h2>
+          </div>
+        </div>
+
+        <div class="col-md-4 fade-card">
+          <div class="stat-card legit shadow">
+            <h5>Legitimate</h5>
+            <h2>{{ legit_count }}</h2>
+          </div>
+        </div>
+      </div>
+
+      <!-- FRAUD VS LEGIT BAR -->
+      <div class="card shadow p-4 mb-4 fade-card">
+        <h5 class="text-center mb-3">Fraud vs Legitimate Comparison</h5>
+        <canvas id="barChart"></canvas>
+      </div>
+
+      <!-- FRAUD TREND -->
+      <div class="card shadow p-4 mb-4 fade-card">
+        <h5 class="text-center mb-3">Fraud Trend Over Time (Hourly)</h5>
+        <canvas id="trendChart"></canvas>
+      </div>
+
+      <!-- FEATURE IMPORTANCE -->
+      <div class="card shadow p-4 mb-4 fade-card">
+        <h5 class="text-center mb-3">Top 10 Feature Importance</h5>
+        <canvas id="importanceChart"></canvas>
+      </div>
+
+      <div class="text-center mt-4">
+        <a href="/static/predictions.csv" class="btn btn-success me-2">
+          Download Prediction CSV
+        </a>
+
+        <a href="/" class="btn btn-secondary"> Analyze Another File </a>
+      </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+const fraudCount = {{ fraud_count }};
+const legitCount = {{ legit_count }};
+const fraudTrend = {{ fraud_trend | tojson }};
+const featureImportance = {{ feature_importance | tojson }};
+
+// ---------------- ANIMATED NUMBER COUNTER ----------------
+function animateCounter(element, target) {
+    let start = 0;
+    const duration = 2000;
+    const startTime = performance.now();
+
+    function update(currentTime) {
+        const progress = Math.min((currentTime - startTime) / duration, 1);
+        element.textContent = Math.floor(progress * target).toLocaleString();
+        if (progress < 1) {
+            requestAnimationFrame(update);
+        }
+    }
+
+    requestAnimationFrame(update);
+}
+
+const totalEl = document.querySelector(".total h2");
+const fraudEl = document.querySelector(".fraud h2");
+const legitEl = document.querySelector(".legit h2");
+
+animateCounter(totalEl, fraudCount + legitCount);
+animateCounter(fraudEl, fraudCount);
+animateCounter(legitEl, legitCount);
+
+
+// ---------------- FADE IN ON SCROLL ----------------
+const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            entry.target.classList.add("visible");
+        }
+    });
+}, { threshold: 0.2 });
+
+document.querySelectorAll(".fade-card").forEach(card => {
+    observer.observe(card);
+});
+
+
+// ---------------- SCROLL-BASED CHART LOADING ----------------
+let barChartLoaded = false;
+let trendChartLoaded = false;
+let importanceChartLoaded = false;
+
+const chartObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+
+            // -------- FRAUD VS LEGIT BAR --------
+            if (entry.target.id === "barChart" && !barChartLoaded) {
+                barChartLoaded = true;
+
+                new Chart(entry.target, {
+                    type: "bar",
+                    data: {
+                        labels: ["Fraud", "Legitimate"],
+                        datasets: [{
+                            label: "Transaction Count",
+                            data: [fraudCount, legitCount],
+                            backgroundColor: ["#dc3545", "#198754"]
+                        }]
+                    },
+                    options: {
+                        animation: {
+                            duration: 2000,
+                            easing: "easeOutBounce"
+                        },
+                        plugins: {
+                            legend: { display: false }
+                        }
+                    }
+                });
+            }
+
+            // -------- FRAUD TREND LINE --------
+            if (entry.target.id === "trendChart" && !trendChartLoaded) {
+                trendChartLoaded = true;
+
+                new Chart(entry.target, {
+                    type: "line",
+                    data: {
+                        labels: Object.keys(fraudTrend),
+                        datasets: [{
+                            label: "Fraud Cases",
+                            data: Object.values(fraudTrend),
+                            borderColor: "#dc3545",
+                            backgroundColor: "rgba(220,53,69,0.2)",
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        animation: {
+                            duration: 2500,
+                            easing: "easeInOutQuart"
+                        }
+                    }
+                });
+            }
+
+            // -------- FEATURE IMPORTANCE --------
+            if (entry.target.id === "importanceChart" && !importanceChartLoaded) {
+                importanceChartLoaded = true;
+
+                new Chart(entry.target, {
+                    type: "bar",
+                    data: {
+                        labels: Object.keys(featureImportance),
+                        datasets: [{
+                            label: "Importance Score",
+                            data: Object.values(featureImportance),
+                            backgroundColor: "#0d6efd"
+                        }]
+                    },
+                    options: {
+                        indexAxis: "y",
+                        animation: {
+                            duration: 2500,
+                            easing: "easeOutElastic"
+                        }
+                    }
+                });
+            }
+        }
+    });
+}, { threshold: 0.4 });
+
+// Observe all three charts
+chartObserver.observe(document.getElementById("barChart"));
+chartObserver.observe(document.getElementById("trendChart"));
+chartObserver.observe(document.getElementById("importanceChart"));
+
+
+});
+
+</script>
+
+
+
+      {% endif %}
+    </div>
+  </body>
+</html>
