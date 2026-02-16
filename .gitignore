@@ -1,5 +1,12 @@
+# Virtual Environment
 .venv/
 __pycache__/
+
+# Dataset
 dataset/
+
+# Model files
+*.pkl
+
+# Generated files
 static/predictions.csv
-*.pyc
